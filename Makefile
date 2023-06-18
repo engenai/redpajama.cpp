@@ -42,7 +42,7 @@ endif
 # keep standard at C11 and C++11
 CFLAGS   = -I.              -O3 -std=c11   -fPIC
 CXXFLAGS = -I. -I./examples -O3 -std=c++11 -fPIC
-LDFLAGS  =
+LDFLAGS  = -g
 
 ifdef LLAMA_DEBUG
 	CFLAGS   += -O0 -g
@@ -271,11 +271,14 @@ save-load-state: examples/save-load-state/save-load-state.cpp build-info.h ggml.
 server: examples/server/server.cpp examples/server/httplib.h examples/server/json.hpp build-info.h ggml.o llama.o common.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -Iexamples/server $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
 
-gptneox.o: examples/redpajama/gptneox.cpp ggml.h examples/redpajama/gptneox.h examples/redpajama/gptneox-util.h
+gptneox.o: examples/redpajama/gptneox.cpp ggml.h ggml-cuda.h examples/redpajama/gptneox.h examples/redpajama/gptneox-util.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common-gptneox.o: examples/redpajama/common-gptneox.cpp examples/redpajama/common-gptneox.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+libgptneox.so: gptneox.o ggml.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 quantize-gptneox: examples/redpajama/quantize-gptneox.cpp ggml.o gptneox.o $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
@@ -290,6 +293,12 @@ redpajama-chat: examples/redpajama/main-redpajama-chat.cpp ggml.o gptneox.o comm
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./redpajama-chat -h for help.  ===='
+	@echo
+
+redpajama-server: examples/redpajama/redpajama-server.cpp examples/redpajama/httplib.h examples/redpajama/json.hpp build-info.h ggml.o gptneox.o common-gptneox.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -Iexamples/redpajama $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
+	@echo
+	@echo '====  Run ./redpajama-server -h for help.  ===='
 	@echo
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh

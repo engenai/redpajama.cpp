@@ -696,6 +696,7 @@ struct gptneox_model_loader {
 
     void load_all_data(gptneox_progress_callback progress_callback, void *  progress_callback_user_data, gptneox_mlock * lmlock) {
         size_t data_size = 0;
+
         for (const gptneox_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
         }
@@ -714,9 +715,9 @@ struct gptneox_model_loader {
 
         size_t done_size = 0;
         for (gptneox_load_tensor & lt : tensors_map.tensors) {
-            if (progress_callback) {
-                progress_callback((float) done_size / data_size, progress_callback_user_data);
-            }
+            // if (progress_callback) {
+            //     progress_callback((float) done_size / data_size, progress_callback_user_data);
+            // }
             GPTNEOX_ASSERT(lt.ggml_tensor); // unused tensors should have been caught by load_data already
             lt.data = (uint8_t *) lt.ggml_tensor->data;
             load_data_for(lt);
@@ -726,9 +727,9 @@ struct gptneox_model_loader {
                 lmlock->grow_to(done_size);
             }
         }
-        if (progress_callback) {
-            progress_callback(1.0f, progress_callback_user_data);
-        }
+        // if (progress_callback) {
+        //     progress_callback(1.0f, progress_callback_user_data);
+        // }
     }
 
     void load_data_for(gptneox_load_tensor & lt) {
@@ -822,7 +823,7 @@ static bool kv_cache_init(
 
     cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
     cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-
+    fprintf(stderr, "kv_cache_init\n");
     return true;
 }
 
@@ -905,7 +906,7 @@ static void gptneox_model_load_internal(
         void * progress_callback_user_data) {
 
     lctx.t_start_us = ggml_time_us();
-
+    fprintf(stderr, "%s: gptneox_model_load_internal",  __func__);
     std::unique_ptr<gptneox_model_loader> ml(new gptneox_model_loader(fname, use_mmap, vocab_only));
 
     lctx.vocab = std::move(ml->file_loaders.at(0)->vocab);
@@ -1006,8 +1007,6 @@ static void gptneox_model_load_internal(
             throw format("ggml_init() failed");
         }
     }
-
-    // prepare memory for the weights
     {
         const auto & hparams = model.hparams;
 
@@ -1045,7 +1044,6 @@ static void gptneox_model_load_internal(
             layer.c_mlp_proj_b = ml->get_tensor(layers_i + ".mlp.dense_4h_to_h.bias",   {n_embd});
         }
     }
-
     ml->done_getting_tensors();
 
     // populate `tensors_by_name`
@@ -1054,7 +1052,7 @@ static void gptneox_model_load_internal(
     }
 
     ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
-
+    fprintf(stderr, "%s: model loaded successfully", __func__);
     model.mapping = std::move(ml->mapping);
 
     // loading time will be recalculate after the first eval, so
@@ -1434,7 +1432,7 @@ static bool gptneox_eval_internal(
     }
 
     // extract embeddings
-    if (lctx.embedding.size()) {
+    if (!lctx.embedding.size()) {
         auto & embedding_out = lctx.embedding;
 
         embedding_out.resize(n_embd);
@@ -2249,7 +2247,6 @@ struct gptneox_context * gptneox_init_from_file(
     ctx->logits_all = params.logits_all;
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
-
     if (!gptneox_model_load(path_model, *ctx, params.n_ctx, memory_type,
                           params.use_mmap, params.use_mlock, params.vocab_only,
                           params.progress_callback, params.progress_callback_user_data)) {
