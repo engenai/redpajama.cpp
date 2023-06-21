@@ -243,6 +243,18 @@ redpajama-chat: examples/redpajama/main-redpajama-chat.cpp ggml.o gptneox.o comm
 	@echo '====  Run ./redpajama-chat -h for help.  ===='
 	@echo
 
+redpajama-server: examples/redpajama/redpajama-server.cpp examples/redpajama/httplib.h examples/redpajama/json.hpp build-info.h ggml.o gptneox.o common-gptneox.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -Iexamples/redpajama $(filter-out %.h,$(filter-out %.hpp,$^)) -o $@ $(LDFLAGS)
+	@echo
+	@echo '====  Run ./redpajama-server -h for help.  ===='
+	@echo
+
+gptneox.o: examples/redpajama/gptneox.cpp ggml.h ggml-cuda.h examples/redpajama/gptneox.h examples/redpajama/gptneox-util.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+libgptneox.so: ggml.o gptneox.o common-gptneox.o $(OBJS)
+	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
+
 build-info.h: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh > $@.tmp
 	@if ! cmp -s $@.tmp $@; then \
