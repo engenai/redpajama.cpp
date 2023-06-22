@@ -694,7 +694,7 @@ struct gptneox_model_loader {
         }
     }
 
-    void load_all_data(gptneox_progress_callback progress_callback, void *  progress_callback_user_data, gptneox_mlock * lmlock) {
+    void load_all_data(gptneox_mlock * lmlock) {
         size_t data_size = 0;
         for (const gptneox_load_tensor & lt : tensors_map.tensors) {
             data_size += lt.size;
@@ -702,11 +702,6 @@ struct gptneox_model_loader {
 
         if (use_mmap) {
             mapping.reset(new gptneox_mmap(&file_loaders.at(0)->file));
-            if (!lmlock) {
-                // Don't call the callback since the actual loading will be lazy
-                // and we can't measure it.
-                progress_callback = NULL;
-            }
             if (lmlock) {
                 lmlock->init(mapping->addr);
             }
@@ -714,9 +709,6 @@ struct gptneox_model_loader {
 
         size_t done_size = 0;
         for (gptneox_load_tensor & lt : tensors_map.tensors) {
-            if (progress_callback) {
-                progress_callback((float) done_size / data_size, progress_callback_user_data);
-            }
             GPTNEOX_ASSERT(lt.ggml_tensor); // unused tensors should have been caught by load_data already
             lt.data = (uint8_t *) lt.ggml_tensor->data;
             load_data_for(lt);
@@ -725,9 +717,6 @@ struct gptneox_model_loader {
             if (use_mmap && lmlock) {
                 lmlock->grow_to(done_size);
             }
-        }
-        if (progress_callback) {
-            progress_callback(1.0f, progress_callback_user_data);
         }
     }
 
@@ -837,8 +826,6 @@ struct gptneox_context_params gptneox_context_default_params() {
         /*.use_mmap                    =*/ true,
         /*.use_mlock                   =*/ false,
         /*.embedding                   =*/ false,
-        /*.progress_callback           =*/ nullptr,
-        /*.progress_callback_user_data =*/ nullptr,
     };
 
     return result;
@@ -900,9 +887,7 @@ static void gptneox_model_load_internal(
         ggml_type memory_type,
         bool use_mmap,
         bool use_mlock,
-        bool vocab_only,
-        gptneox_progress_callback progress_callback,
-        void * progress_callback_user_data) {
+        bool vocab_only) {
 
     lctx.t_start_us = ggml_time_us();
 
@@ -1053,7 +1038,7 @@ static void gptneox_model_load_internal(
         model.tensors_by_name.emplace_back(lt.name, lt.ggml_tensor);
     }
 
-    ml->load_all_data(progress_callback, progress_callback_user_data, use_mlock ? &lctx.model.mlock_mmap : NULL);
+    ml->load_all_data(use_mlock ? &lctx.model.mlock_mmap : NULL);
 
     model.mapping = std::move(ml->mapping);
 
@@ -1069,12 +1054,10 @@ static bool gptneox_model_load(
         ggml_type memory_type,
         bool use_mmap,
         bool use_mlock,
-        bool vocab_only,
-        gptneox_progress_callback progress_callback,
-        void *progress_callback_user_data) {
+        bool vocab_only) {
     try {
         gptneox_model_load_internal(fname, lctx, n_ctx, memory_type, use_mmap, use_mlock,
-                                  vocab_only, progress_callback, progress_callback_user_data);
+                                  vocab_only);
         return true;
     } catch (const std::string & err) {
         fprintf(stderr, "error loading model: %s\n", err.c_str());
@@ -2228,31 +2211,13 @@ struct gptneox_context * gptneox_init_from_file(
         params.seed = time(NULL);
     }
 
-    unsigned cur_percentage = 0;
-    if (params.progress_callback == NULL) {
-        params.progress_callback_user_data = &cur_percentage;
-        params.progress_callback = [](float progress, void * ctx) {
-            unsigned * cur_percentage_p = (unsigned *) ctx;
-            unsigned percentage = (unsigned) (100 * progress);
-            while (percentage > *cur_percentage_p) {
-                ++*cur_percentage_p;
-                fprintf(stderr, ".");
-                fflush(stderr);
-                if (percentage >= 100) {
-                    fprintf(stderr, "\n");
-                }
-            }
-        };
-    }
-
     ctx->rng = std::mt19937(params.seed);
     ctx->logits_all = params.logits_all;
 
     ggml_type memory_type = params.f16_kv ? GGML_TYPE_F16 : GGML_TYPE_F32;
 
     if (!gptneox_model_load(path_model, *ctx, params.n_ctx, memory_type,
-                          params.use_mmap, params.use_mlock, params.vocab_only,
-                          params.progress_callback, params.progress_callback_user_data)) {
+                          params.use_mmap, params.use_mlock, params.vocab_only)) {
         fprintf(stderr, "%s: failed to load model\n", __func__);
         gptneox_free(ctx);
         return nullptr;

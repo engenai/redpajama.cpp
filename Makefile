@@ -249,10 +249,7 @@ redpajama-server: examples/redpajama/redpajama-server.cpp examples/redpajama/htt
 	@echo '====  Run ./redpajama-server -h for help.  ===='
 	@echo
 
-gptneox.o: examples/redpajama/gptneox.cpp ggml.h ggml-cuda.h examples/redpajama/gptneox.h examples/redpajama/gptneox-util.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-libgptneox.so: ggml.o gptneox.o common-gptneox.o $(OBJS)
+libgptneox.so: ggml.o gptneox.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -shared -fPIC -o $@ $^ $(LDFLAGS)
 
 build-info.h: $(wildcard .git/index) scripts/build-info.sh

@@ -193,7 +193,7 @@ extern "C" {
     // Special tokens
     GPTNEOX_API gptneox_token gptneox_token_bos();
     GPTNEOX_API gptneox_token gptneox_token_eos();
-    // GPTNEOX_API gptneox_token gptneox_token_nl();
+    GPTNEOX_API gptneox_token gptneox_token_nl();
 
     // TODO: improve the last_n_tokens interface ?
     GPTNEOX_API gptneox_token gptneox_sample_top_p_top_k(
